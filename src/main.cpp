@@ -29,17 +29,31 @@ digitalWrite(inl_2, HIGH);
 
 #include <Arduino.h>
 #include <MsTimer2.h>
+#include <ArduPID.h>
+
+ArduPID myController_l;
+double input_l;
+double output_l;
+double setpoint_l = 0.22;
+double p_l = 100;
+double i_l = 50;
+double d_l = 5;
+
+ArduPID myController_r;
+double input_r;
+double output_r;
+double setpoint_r = 0.22;
+double p_r = 80;
+double i_r = 50;
+double d_r = 5;
 
 const byte led_pin = 4;
 const byte encoder_l = 3;
 const byte encoder_r = 2;
-
 const byte standby = 6;
-
 const byte pwm_r = 9;
 const byte inr_1 = A2;
 const byte inr_2 = A3;
-
 const byte pwm_l = 10;
 const byte inl_1 = A1;
 const byte inl_2 = A0;
@@ -50,20 +64,19 @@ boolean direction_r = false;
 int ticks_encoder_l;
 int ticks_encoder_r;
 
-//int last_ticks_encoder_l;
-//int last_ticks_encoder_r;
+float wheel_radius_l = 0.031;
+float wheel_radius_r = 0.031;
+float baseline = 0.060;
 
 int interruption_time = 100;
 //360degrees /48ppr
 const float speed_constant = 7.5;
 
-/*
-motor = 0 = left
-motor = 1 = right
+float last_x;
+float last_y;
+float last_theta;
 
-direction = 0 = front
-direction = 1 = back
-*/
+
 void move(boolean motor, int pwm)
 {
   if(motor == 0)
@@ -101,26 +114,64 @@ void interruption()
 {
   float last_degrees_l = ticks_encoder_l * speed_constant;
   float last_degrees_r = ticks_encoder_r * speed_constant;
-
   //°/s
   float last_speed_l = last_degrees_l * (speed_constant/1000);
   float last_speed_r = last_degrees_r * (speed_constant/1000);
 
-  Serial.print(ticks_encoder_l);
-  Serial.print(" - ");
-  Serial.print(last_degrees_l);
-  Serial.print(" - ");
-  Serial.print(last_speed_l);
-  Serial.print(" - ");
-  Serial.print(ticks_encoder_r);
-  Serial.print(" - ");
-  Serial.print(last_degrees_r);
-  Serial.print(" - ");
-  Serial.print(last_speed_r);
-  Serial.println("");
-
   ticks_encoder_l = 0;
   ticks_encoder_r = 0;
+
+  input_l = last_speed_l;
+  myController_l.compute();
+  direction_l = 0;
+  move(0, output_l);
+  
+  input_r = last_speed_r;
+  myController_r.compute();
+  direction_r = 0;
+  move(1, output_r);
+  
+  /*
+  Serial.print(">last_speed_l:");
+  Serial.println(last_speed_l);
+  Serial.print(">output_l:");
+  Serial.println(output_l);
+  Serial.print(">last_speed_r:");
+  Serial.println(last_speed_r);
+  Serial.print(">output_r:");
+  Serial.println(output_r);
+  */
+
+  //wheel velocity l
+  //float vl = wheel_radius_l * (last_speed_l*0.01745329251994);
+  float vl = wheel_radius_l * (last_speed_l);
+  //wheel velocity r
+  //float vr = wheel_radius_r * (last_speed_r*0.01745329251994);
+  float vr = wheel_radius_r * (last_speed_r);
+
+  float x = ((vl/2)*cos(last_theta)) +  ((vr/2)*cos(last_theta));
+  float y = ((vl/2)*sin(last_theta)) +  ((vr/2)*sin(last_theta));
+  //float theta = (-(wheel_radius_l/baseline)*(last_speed_l*0.01745329251994)) + ((wheel_radius_r/baseline)*(last_speed_r*0.01745329251994));
+  float theta = (-(wheel_radius_l/baseline)*last_speed_l) + ((wheel_radius_r/baseline)*last_speed_r);
+
+  last_x += x;
+  last_y += y;
+  last_theta += theta;
+
+  Serial.print(">last_x:");
+  Serial.println(last_x);
+  Serial.print(">last_y:");
+  Serial.println(last_y);
+  Serial.print(">last_theta:");
+  Serial.println(last_theta);
+
+  if(last_x >= 1)
+  {
+     myController_l.stop();
+     myController_r.stop();
+      digitalWrite(standby, LOW);
+  }
+
 }
 
 void count_encoder_l()
@@ -167,14 +218,27 @@ void setup()
 
   MsTimer2::set(interruption_time, interruption);
   MsTimer2::start();
+
+  myController_l.begin(&input_l, &output_l, &setpoint_l, p_l, i_l, d_l);
+  myController_l.setSampleTime(interruption_time);
+  myController_l.setOutputLimits(0, 140);
+  //myController.setBias(255.0 / 2.0);
+  myController_l.setWindUpLimits(-50, 50);
+  myController_l.start();
+
+  myController_r.begin(&input_r, &output_r, &setpoint_r, p_r, i_r, d_r);
+  myController_r.setSampleTime(interruption_time);
+  myController_r.setOutputLimits(0, 140);
+  //myController.setBias(255.0 / 2.0);
+  myController_r.setWindUpLimits(-50, 50);
+  myController_r.start();
+
 }
 void loop()
 {
-  
-  direction_l = 0;
-  move(0, 30);
-  direction_r = 0;
-  move(1, 30);
+  //setpoint = 0.56;
+  //direction_r = 0;
+  //move(1, 30);
   //delay(2000);
   
 
