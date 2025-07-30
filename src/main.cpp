@@ -27,6 +27,10 @@ digitalWrite(inl_2, HIGH);
 48 cortes em cada roda
 */
 
+/*
+https://aleksandarhaber.com/clear-and-detailed-explanation-of-kinematics-equations-and-geometry-of-motion-of-differential-wheeled-robot-differential-drive-robot/
+*/
+
 #include <Arduino.h>
 #include <MsTimer2.h>
 #include <ArduPID.h>
@@ -34,7 +38,7 @@ digitalWrite(inl_2, HIGH);
 ArduPID myController_l;
 double input_l;
 double output_l;
-double setpoint_l = 0.22;
+double setpoint_l = 220;
 double p_l = 100;
 double i_l = 50;
 double d_l = 5;
@@ -42,7 +46,7 @@ double d_l = 5;
 ArduPID myController_r;
 double input_r;
 double output_r;
-double setpoint_r = 0.22;
+double setpoint_r = 220;
 double p_r = 80;
 double i_r = 50;
 double d_r = 5;
@@ -68,13 +72,13 @@ float wheel_radius_l = 0.031;
 float wheel_radius_r = 0.031;
 float baseline = 0.060;
 
-int interruption_time = 100;
+float interruption_time = 100.0;
 //360degrees /48ppr
 const float speed_constant = 7.5;
 
-float last_x;
-float last_y;
-float last_theta;
+float last_x = 0;
+float last_y = 0;
+float last_theta = 0;
 
 
 void move(boolean motor, int pwm)
@@ -113,46 +117,62 @@ void move(boolean motor, int pwm)
 void interruption()
 {
   float last_degrees_l = ticks_encoder_l * speed_constant;
+  //float last_degrees_l = (ticks_encoder_l * 360)/48;
   float last_degrees_r = ticks_encoder_r * speed_constant;
+  //float last_degrees_r = (ticks_encoder_r * 360)/48;
   //°/s
-  float last_speed_l = last_degrees_l * (speed_constant/1000);
-  float last_speed_r = last_degrees_r * (speed_constant/1000);
+  float last_speed_deg_s_l = last_degrees_l / (interruption_time/1000);
+  float last_speed_deg_s_r = last_degrees_r / (interruption_time/1000);
+  //rad/s
+  float last_speed_rad_s_l = last_speed_deg_s_l * 0.017453292519943;
+  float last_speed_rad_s_r = last_speed_deg_s_r * 0.017453292519943;
+
+  /*
+  Serial.print("last_speed_deg_s_l: ");
+  Serial.println(last_speed_deg_s_l);
+  Serial.print("last_speed_deg_s_r: ");
+  Serial.println(last_speed_deg_s_r);
+
+  Serial.print("last_speed_rad_s_l: ");
+  Serial.println(last_speed_rad_s_l);
+  Serial.print("last_speed_rad_s_r: ");
+  Serial.println(last_speed_rad_s_r);
+  */
 
   ticks_encoder_l = 0;
   ticks_encoder_r = 0;
 
-  input_l = last_speed_l;
+  input_l = last_speed_deg_s_l;
   myController_l.compute();
   direction_l = 0;
-  move(0, output_l);
+  //move(0, output_l);
+  move(0, 50);
   
-  input_r = last_speed_r;
+  input_r = last_speed_deg_s_r;
   myController_r.compute();
   direction_r = 0;
-  move(1, output_r);
+  //move(1, output_r);
+  move(1, 40);
   
-  /*
-  Serial.print(">last_speed_l:");
-  Serial.println(last_speed_l);
-  Serial.print(">output_l:");
-  Serial.println(output_l);
-  Serial.print(">last_speed_r:");
-  Serial.println(last_speed_r);
-  Serial.print(">output_r:");
-  Serial.println(output_r);
-  */
-
   //wheel velocity l
   //float vl = wheel_radius_l * (last_speed_l*0.01745329251994);
-  float vl = wheel_radius_l * (last_speed_l);
+  float vl = wheel_radius_l * last_speed_rad_s_l;
   //wheel velocity r
   //float vr = wheel_radius_r * (last_speed_r*0.01745329251994);
-  float vr = wheel_radius_r * (last_speed_r);
+  float vr = wheel_radius_r * last_speed_rad_s_r;
 
-  float x = ((vl/2)*cos(last_theta)) +  ((vr/2)*cos(last_theta));
-  float y = ((vl/2)*sin(last_theta)) +  ((vr/2)*sin(last_theta));
+  Serial.print("vl: ");
+  Serial.println(vl);
+  Serial.print("vr: ");
+  Serial.println(vr);
+
+
+  //float x = ((vl/2)*cos(last_theta)) +  ((vr/2)*cos(last_theta));
+  float x = (((vl/2)*cos(last_theta)) +  ((vr/2)*cos(last_theta))) * (interruption_time/1000);
+  float y = (((vl/2)*sin(last_theta)) +  ((vr/2)*sin(last_theta))) * (interruption_time/1000);
   //float theta = (-(wheel_radius_l/baseline)*(last_speed_l*0.01745329251994)) + ((wheel_radius_r/baseline)*(last_speed_r*0.01745329251994));
-  float theta = (-(wheel_radius_l/baseline)*last_speed_l) + ((wheel_radius_r/baseline)*last_speed_r);
+  //float theta = (-(wheel_radius_l/baseline)*last_speed_rad_s_l) + ((wheel_radius_r/baseline)*last_speed_rad_s_r);
+  float theta = 0;
 
   last_x += x;
   last_y += y;
@@ -160,17 +180,21 @@ void interruption()
 
   Serial.print(">last_x:");
   Serial.println(last_x);
+
   Serial.print(">last_y:");
   Serial.println(last_y);
+
   Serial.print(">last_theta:");
   Serial.println(last_theta);
 
+  
   if(last_x >= 1)
   {
      myController_l.stop();
      myController_r.stop();
       digitalWrite(standby, LOW);
   }
+  
 
 }
 
