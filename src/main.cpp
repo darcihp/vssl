@@ -38,18 +38,18 @@ https://aleksandarhaber.com/clear-and-detailed-explanation-of-kinematics-equatio
 ArduPID myController_l;
 double input_l;
 double output_l;
-double setpoint_l = 220;
-double p_l = 100;
-double i_l = 50;
-double d_l = 5;
+double setpoint_l = 0;
+double p_l = 0.5;
+double i_l = 0.01;
+double d_l = 0;
 
 ArduPID myController_r;
 double input_r;
 double output_r;
-double setpoint_r = 220;
-double p_r = 80;
-double i_r = 50;
-double d_r = 5;
+double setpoint_r = 0;
+double p_r = 0.5;
+double i_r = 0.01;
+double d_r = 0;
 
 const byte led_pin = 4;
 const byte encoder_l = 3;
@@ -61,6 +61,8 @@ const byte inr_2 = A3;
 const byte pwm_l = 10;
 const byte inl_1 = A1;
 const byte inl_2 = A0;
+const byte key_1 = A4;
+const byte key_2 = A5;
 
 boolean direction_l = false;
 boolean direction_r = false;
@@ -70,9 +72,9 @@ int ticks_encoder_r;
 
 float wheel_radius_l = 0.031;
 float wheel_radius_r = 0.031;
-float baseline = 0.060;
+float baseline = 0.059;
 
-float interruption_time = 100.0;
+float interruption_time = 10.0;
 //360degrees /48ppr
 const float speed_constant = 7.5;
 
@@ -80,6 +82,7 @@ float last_x = 0;
 float last_y = 0;
 float last_theta = 0;
 
+int state_machine = 0;
 
 void move(boolean motor, int pwm)
 {
@@ -142,42 +145,132 @@ void interruption()
   ticks_encoder_l = 0;
   ticks_encoder_r = 0;
 
-  input_l = last_speed_deg_s_l;
-  myController_l.compute();
-  direction_l = 0;
+  //input_l = last_speed_deg_s_l;
+  //myController_l.compute();
+  //direction_l = 0;
   //move(0, output_l);
-  move(0, 50);
+  //move(0, 50);
   
-  input_r = last_speed_deg_s_r;
-  myController_r.compute();
-  direction_r = 0;
+  //input_r = last_speed_deg_s_r;
+  //myController_r.compute();
+  //direction_r = 0;
   //move(1, output_r);
-  move(1, 40);
-  
+  //move(1, 40);
+
+  //move(0, 19);
+  //move(1, 15);
+
+  move(0, 34);
+  move(1, 30);
+
+  if (state_machine == 0)
+  {
+    direction_l = 0;
+    direction_r = 0;
+    //move(0, 19);
+    //move(1, 15);
+  }
+
+  if(last_x >= 0.5 && state_machine == 0)
+  {
+    direction_l = 1;
+    direction_r = 0;
+    //move(0, 19);
+    //move(1, 15);
+    state_machine = 1;
+  }
+
+  if(last_theta >= 1.57 && state_machine == 1)
+  {
+    direction_l = 0;
+    direction_r = 0;
+    //move(0, 19);
+    //move(1, 15);
+    state_machine = 3;
+  }
+
+  if(last_y >= 0.5 && state_machine == 3)
+  {
+    direction_l = 1;
+    direction_r = 0;
+    //move(0, 19);
+    //move(1, 15);
+    state_machine = 4;
+  }
+
+  if(last_theta >= 3.14 && state_machine == 4)
+  {
+    direction_l = 0;
+    direction_r = 0;
+    //move(0, 19);
+    //move(1, 15);
+    state_machine = 5;
+  }
+
+  if(last_x <= 0 && state_machine == 5)
+  {
+    direction_l = 1;
+    direction_r = 0;
+    //move(0, 19);
+    //move(1, 15);
+    state_machine = 6;
+  }
+
+  if(last_theta >= 4.71 && state_machine == 6)
+  {
+    direction_l = 0;
+    direction_r = 0;
+    //move(0, 19);
+    //move(1, 15);
+    state_machine = 7;
+  }
+
+   if(last_y <= 0 && state_machine == 7)
+  {
+    direction_l = 1;
+    direction_r = 0;
+    //move(0, 19);
+    //move(1, 15);
+    state_machine = 8;
+  }
+
+  if(last_theta >= 6.28 && state_machine == 8)
+  {
+    digitalWrite(standby, LOW);
+    digitalWrite(led_pin, HIGH);
+    /*
+    direction_l = 0;
+    direction_r = 0;
+    move(0, 19);
+    move(1, 15);
+    state_machine = 6;
+    */
+  }
+
   //wheel velocity l
-  //float vl = wheel_radius_l * (last_speed_l*0.01745329251994);
   float vl = wheel_radius_l * last_speed_rad_s_l;
   //wheel velocity r
-  //float vr = wheel_radius_r * (last_speed_r*0.01745329251994);
   float vr = wheel_radius_r * last_speed_rad_s_r;
 
+  /*
   Serial.print("vl: ");
   Serial.println(vl);
   Serial.print("vr: ");
   Serial.println(vr);
-
+  */
 
   //float x = ((vl/2)*cos(last_theta)) +  ((vr/2)*cos(last_theta));
   float x = (((vl/2)*cos(last_theta)) +  ((vr/2)*cos(last_theta))) * (interruption_time/1000);
   float y = (((vl/2)*sin(last_theta)) +  ((vr/2)*sin(last_theta))) * (interruption_time/1000);
-  //float theta = (-(wheel_radius_l/baseline)*(last_speed_l*0.01745329251994)) + ((wheel_radius_r/baseline)*(last_speed_r*0.01745329251994));
-  //float theta = (-(wheel_radius_l/baseline)*last_speed_rad_s_l) + ((wheel_radius_r/baseline)*last_speed_rad_s_r);
-  float theta = 0;
+  //float theta = (-(vl/baseline) + (vr/baseline)) * (interruption_time/1000);
+  float theta = ((vr - vl)/baseline) * (interruption_time/1000);
+  //float theta = 0;
 
   last_x += x;
   last_y += y;
   last_theta += theta;
 
+  /*
   Serial.print(">last_x:");
   Serial.println(last_x);
 
@@ -186,16 +279,8 @@ void interruption()
 
   Serial.print(">last_theta:");
   Serial.println(last_theta);
-
+  */
   
-  if(last_x >= 1)
-  {
-     myController_l.stop();
-     myController_r.stop();
-      digitalWrite(standby, LOW);
-  }
-  
-
 }
 
 void count_encoder_l()
@@ -238,23 +323,54 @@ void setup()
   ticks_encoder_l = 0;
   ticks_encoder_r = 0;
 
+  pinMode(key_1, INPUT_PULLUP);
+  pinMode(key_2, INPUT_PULLUP);
+
+  bool r_key_1 = digitalRead(key_1);
+  bool r_key_2 = digitalRead(key_2);
+
+  if(r_key_1 == 0 && r_key_2 == 0)
+  {
+    setpoint_l = 10;
+    setpoint_r = 10;
+  }
+
+  if(r_key_1 == 0 && r_key_2 == 1)
+  {
+    setpoint_l = 20;
+    setpoint_r = 20;
+  }
+
+  if(r_key_1 == 1 && r_key_2 == 0)
+  {
+    setpoint_l = 30;
+    setpoint_r = 30;
+  }
+
+  if(r_key_1 == 1 && r_key_2 == 1)
+  {
+    setpoint_l = 40;
+    setpoint_r = 40;
+  }
+  
+
   Serial.begin(9600);
 
   MsTimer2::set(interruption_time, interruption);
   MsTimer2::start();
 
   myController_l.begin(&input_l, &output_l, &setpoint_l, p_l, i_l, d_l);
-  myController_l.setSampleTime(interruption_time);
-  myController_l.setOutputLimits(0, 140);
+  //myController_l.setSampleTime(interruption_time);
+  myController_l.setOutputLimits(0, 50);
   //myController.setBias(255.0 / 2.0);
-  myController_l.setWindUpLimits(-50, 50);
+  myController_l.setWindUpLimits(-10, 10);
   myController_l.start();
 
   myController_r.begin(&input_r, &output_r, &setpoint_r, p_r, i_r, d_r);
-  myController_r.setSampleTime(interruption_time);
-  myController_r.setOutputLimits(0, 140);
+  //myController_r.setSampleTime(interruption_time);
+  myController_r.setOutputLimits(0, 50);
   //myController.setBias(255.0 / 2.0);
-  myController_r.setWindUpLimits(-50, 50);
+  myController_r.setWindUpLimits(-10, 10);
   myController_r.start();
 
 }
